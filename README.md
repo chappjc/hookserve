@@ -3,7 +3,7 @@ HookServe
 
 http://godoc.org/github.com/phayes/hookserve/hookserve
 
-HookServe is a small golang utility for receiving github webhooks. It's easy to use, flexible, and provides strong security though GitHub's HMAC webhook verification scheme.
+HookServe is a small golang utility for receiving GitHub webhooks. It's easy to use, flexible, and provides strong security though GitHub's HMAC webhook verification scheme.
 
 ```go
 server := hookserve.NewServer()
@@ -36,12 +36,12 @@ $ hookserve --port=8888 logger -t PushEvent #log github webhook push event to th
 sudo apt-get install golang                    # Download go. Alternativly build from source: https://golang.org/doc/install/source
 mkdir ~/.gopath && export GOPATH=~/.gopath     # Replace with desired GOPATH
 export PATH=$PATH:$GOPATH/bin                  # For convenience, add go's bin dir to your PATH
-go get github.com/phayes/hookserve/cmd/hookserve
+go get github.com/phayes/hookserve/util/hookserve
 ```
 
 ###Settings up GitHub Webhooks
 
 
-Setting up webhooks on github is easy. Navigate to `github.com/<name>/<repo>/settings/hooks` and create a new webhook. Setting up your webhook should look something like this:
+Setting up webhooks on GitHub is easy. Navigate to `github.com/<name>/<repo>/settings/hooks` and create a new webhook. Setting up your webhook should look something like this:
 
-![Configuring webhooks in github](https://i.imgur.com/u3ciUD7.png)
+![Configuring webhooks in GitHub](https://i.imgur.com/u3ciUD7.png)
