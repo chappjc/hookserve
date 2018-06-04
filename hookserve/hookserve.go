@@ -5,14 +5,16 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"errors"
-	"github.com/bmatsuo/go-jsontree"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/bmatsuo/go-jsontree"
 )
 
-var ErrInvalidEventFormat = errors.New("Unable to parse event string. Invalid Format.")
+var ErrInvalidEventFormat = errors.New("unable to parse event string: invalid format")
 
 type Event struct {
 	Owner      string // The username of the owner of the repository
@@ -25,6 +27,19 @@ type Event struct {
 	BaseRepo   string // For Pull Requests, contains the base repo
 	BaseBranch string // For Pull Requests, contains the base branch
 }
+
+type EventType int
+
+const (
+	ETypePullRequest EventType = iota
+	ETypePush
+	ETypePing
+	ETypeUnknown
+
+	EventNamePullRequest = "pull_request"
+	EventNamePush        = "push"
+	EventNamePing        = "ping"
+)
 
 // Create a new event from a string, the string format being the same as the one produced by event.String()
 func NewEvent(e string) (*Event, error) {
@@ -53,7 +68,7 @@ func NewEvent(e string) (*Event, error) {
 	event.Commit = parts[4][8:]
 
 	// Fill in extra values if it's a pull_request
-	if event.Type == "pull_request" {
+	if event.Type == EventNamePullRequest {
 		if len(parts) == 9 { // New format
 			event.Action = parts[5][8:]
 			event.BaseOwner = parts[6][8:]
@@ -78,7 +93,7 @@ func (e *Event) String() (output string) {
 	output += "branch: " + e.Branch + "\n"
 	output += "commit: " + e.Commit + "\n"
 
-	if e.Type == "pull_request" {
+	if e.Type == EventNamePullRequest {
 		output += "action: " + e.Action + "\n"
 		output += "bowner: " + e.BaseOwner + "\n"
 		output += "brepo:  " + e.BaseRepo + "\n"
@@ -96,8 +111,8 @@ type Server struct {
 	Events     chan Event // Channel of events. Read from this channel to get push events as they happen.
 }
 
-// Create a new server with sensible defaults.
-// By default the Port is set to 80 and the Path is set to `/postreceive`
+// NewServer creates a new server with sensible defaults. By default, the Port
+// is set to 80 and the Path is set to `/postreceive`
 func NewServer() *Server {
 	return &Server{
 		Port:       80,
@@ -107,12 +122,15 @@ func NewServer() *Server {
 	}
 }
 
-// Spin up the server and listen for github webhook push events. The events will be passed to Server.Events channel.
+// ListenAndServe spins up the server and listens for github webhook push
+// events. The events will be passed to Server.Events channel.
 func (s *Server) ListenAndServe() error {
 	return http.ListenAndServe(":"+strconv.Itoa(s.Port), s)
 }
 
-// Inside a go-routine, spin up the server and listen for github webhook push events. The events will be passed to Server.Events channel.
+// GoListenAndServe spins up the server and listens for github webhook push
+// events. The events will be passed to Server.Events channel. To be run as a
+// goroutine.
 func (s *Server) GoListenAndServe() {
 	go func() {
 		err := s.ListenAndServe()
@@ -130,9 +148,10 @@ func (s *Server) ignoreRef(rawRef string) bool {
 	return rawRef[:11] != "refs/heads/"
 }
 
-// Satisfies the http.Handler interface.
-// Instead of calling Server.ListenAndServe you can integrate hookserve.Server inside your own http server.
-// If you are using hookserve.Server in his way Server.Path should be set to match your mux pattern and Server.Port will be ignored.
+// ServeHTTP satisfies the http.Handler interface. Instead of calling
+// Server.ListenAndServe you can integrate hookserve.Server inside your own http
+// server. If you are using hookserve.Server in his way Server.Path should be
+// set to match your mux pattern and Server.Port will be ignored.
 func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 
@@ -150,7 +169,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "400 Bad Request - Missing X-GitHub-Event Header", http.StatusBadRequest)
 		return
 	}
-	if eventType != "push" && eventType != "pull_request" {
+	if eventType != EventNamePush && eventType != EventNamePullRequest {
 		http.Error(w, "400 Bad Request - Unknown Event Type "+eventType, http.StatusBadRequest)
 		return
 	}
@@ -188,9 +207,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Parse the request and build the Event
-	event := Event{}
+	var event Event
 
-	if eventType == "push" {
+	switch eventType {
+	case EventNamePush:
 		rawRef, err := request.Get("ref").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -219,7 +239,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-	} else if eventType == "pull_request" {
+	case EventNamePullRequest:
 		event.Action, err = request.Get("action").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -227,50 +247,57 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 
 		// Fill in values
+		// fallthrough handles Type, Owner, and Repo
+		event.Branch, err = request.Get(EventNamePullRequest).Get("head").Get("ref").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.Commit, err = request.Get(EventNamePullRequest).Get("head").Get("sha").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.BaseOwner, err = request.Get(EventNamePullRequest).Get("base").Get("repo").Get("owner").Get("login").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.BaseRepo, err = request.Get(EventNamePullRequest).Get("base").Get("repo").Get("name").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		event.BaseBranch, err = request.Get(EventNamePullRequest).Get("base").Get("ref").String()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fallthrough
+	case EventNamePing:
 		event.Type = eventType
-		event.Owner, err = request.Get("pull_request").Get("head").Get("repo").Get("owner").Get("login").String()
+		event.Owner, err = request.Get(EventNamePullRequest).Get("head").Get("repo").Get("owner").Get("login").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		event.Repo, err = request.Get("pull_request").Get("head").Get("repo").Get("name").String()
+		event.Repo, err = request.Get(EventNamePullRequest).Get("head").Get("repo").Get("name").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		event.Branch, err = request.Get("pull_request").Get("head").Get("ref").String()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		event.Commit, err = request.Get("pull_request").Get("head").Get("sha").String()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		event.BaseOwner, err = request.Get("pull_request").Get("base").Get("repo").Get("owner").Get("login").String()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		event.BaseRepo, err = request.Get("pull_request").Get("base").Get("repo").Get("name").String()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		event.BaseBranch, err = request.Get("pull_request").Get("base").Get("ref").String()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
+	default:
 		http.Error(w, "Unknown Event Type "+eventType, http.StatusInternalServerError)
 		return
 	}
 
 	// We've built our Event - put it into the channel and we're done
 	go func() {
-		s.Events <- event
+		select {
+		case s.Events <- event:
+		default:
+			fmt.Println("Events buffer full! Webhook unhandled.")
+		}
 	}()
 
 	w.Write([]byte(event.String()))

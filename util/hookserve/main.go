@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/codegangsta/cli"
-	"github.com/phayes/hookserve/hookserve"
 	"os"
 	"os/exec"
+	"strings"
+
+	"github.com/chappjc/hookserve/hookserve"
+	"github.com/codegangsta/cli"
 )
 
 func main() {
@@ -16,7 +18,7 @@ func main() {
 	app.Usage += "EXAMPLE:\n"
 	app.Usage += "   hookserve --secret=whiskey --port=8888 echo  #Echo back the information provided\n"
 	app.Usage += "   hookserve logger -t PushEvent #log the push event to the system log (/var/log/message)"
-	app.Version = "1.0"
+	app.Version = "1.1"
 	app.Author = "Patrick Hayes"
 	app.Email = "patrick.d.hayes@gmail.com"
 
@@ -44,6 +46,15 @@ func main() {
 		server.IgnoreTags = !c.Bool("tags")
 		server.GoListenAndServe()
 
+		getShortRev := func(rev string) string {
+			shortRev := rev
+			revlen := len(shortRev)
+			if revlen > 8 {
+				shortRev = shortRev[:9]
+			}
+			return shortRev
+		}
+
 		for commit := range server.Events {
 			if args := c.Args(); len(args) != 0 {
 				root := args[0]
@@ -51,9 +62,17 @@ func main() {
 				cmd := exec.Command(root, rest...)
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
+
+				fmt.Printf("web hook received: event type %s on %s:%s/%s [%s]",
+					commit.Type, commit.Owner, commit.Repo, commit.Branch,
+					getShortRev(commit.Commit))
+				fmt.Printf("Launching command: %s", strings.Join(args, " "))
+
 				cmd.Run()
 			} else {
-				fmt.Println(commit.Owner + " " + commit.Repo + " " + commit.Branch + " " + commit.Commit)
+				fmt.Printf("web hook received: event type %s on %s:%s/%s [%s]",
+					commit.Type, commit.Owner, commit.Repo, commit.Branch,
+					getShortRev(commit.Commit))
 			}
 		}
 	}

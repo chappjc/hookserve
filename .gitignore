@@ -1,0 +1,5 @@
+debug
+vendor/
+*.out
+*.exe
+util/hookserve/hookserve
