@@ -63,14 +63,14 @@ func main() {
 				cmd.Stdout = os.Stdout
 				cmd.Stderr = os.Stderr
 
-				fmt.Printf("web hook received: event type %s on %s:%s/%s [%s]",
+				fmt.Printf("web hook received: event type %s on %s/%s, branch %s, [%s]\n",
 					commit.Type, commit.Owner, commit.Repo, commit.Branch,
 					getShortRev(commit.Commit))
-				fmt.Printf("Launching command: %s", strings.Join(args, " "))
+				fmt.Printf("Launching command: %s\n", strings.Join(args, " "))
 
 				cmd.Run()
 			} else {
-				fmt.Printf("web hook received: event type %s on %s:%s/%s [%s]",
+				fmt.Printf("web hook received: event type %s on %s/%s, branch %s, [%s]\n",
 					commit.Type, commit.Owner, commit.Repo, commit.Branch,
 					getShortRev(commit.Commit))
 			}
