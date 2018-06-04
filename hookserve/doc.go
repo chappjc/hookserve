@@ -5,21 +5,16 @@ HookServe is a small golang utility for receiving github webhooks. It's easy to 
     server.Secret = "supersecretcode"
     server.GoListenAndServe()
 
-    for {
-        select {
-        case event := <-server.Events:
-            fmt.Println(event.Owner + " " + event.Repo + " " + event.Branch + " " + event.Commit)
-        default:
-            time.Sleep(100)
-        }
+    for event := range server.Events {
+        fmt.Println(event.Owner + " " + event.Repo + " " + event.Branch + " " + event.Commit)
     }
+}
 
 
 Command Line Utility
 
 It also comes with a command-line utility that lets you pass webhook push events to other commands
     $ hookserve --port=8888 logger -t PushEvent #log github webhook push event to the system log (/var/log/message) via the logger command
-
 
 Settings up GitHub Webhooks
 
