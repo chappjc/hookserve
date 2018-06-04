@@ -165,11 +165,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	eventType := req.Header.Get("X-GitHub-Event")
-	if eventType == "" {
+	switch eventType {
+	case EventNamePush, EventNamePullRequest, EventNamePing:
+	case "":
 		http.Error(w, "400 Bad Request - Missing X-GitHub-Event Header", http.StatusBadRequest)
 		return
-	}
-	if eventType != EventNamePush && eventType != EventNamePullRequest {
+	default:
 		http.Error(w, "400 Bad Request - Unknown Event Type "+eventType, http.StatusBadRequest)
 		return
 	}
