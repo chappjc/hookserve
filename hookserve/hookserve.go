@@ -287,12 +287,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		fallthrough
 	case EventNamePing:
 		event.Type = eventType
-		event.Owner, err = request.Get(EventNamePing).Get("head").Get("repo").Get("owner").Get("login").String()
+		event.Owner, err = request.Get("repository").Get("owner").Get("login").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		event.Repo, err = request.Get(EventNamePing).Get("head").Get("repo").Get("name").String()
+		event.Repo, err = request.Get("repository").Get("name").String()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
